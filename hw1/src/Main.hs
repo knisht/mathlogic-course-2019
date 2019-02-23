@@ -1,9 +1,9 @@
 module Main where
 
-import ParseExpression
+import LogicParser
 
 main :: IO ()
 main = do 
     contents <- getContents
-    putStrLn $ prs contents
+    putStrLn $ unwrap $ render <$> prs contents
     return ()
