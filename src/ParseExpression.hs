@@ -1,0 +1,62 @@
+module ParseExpression where
+
+import Control.Monad (void)
+import Control.Monad.Combinators.Expr -- from parser-combinators
+import Data.Void
+import Text.Megaparsec
+import Text.Megaparsec.Char
+import qualified Text.Megaparsec.Char.Lexer as L
+
+
+data Expr = Var String |
+             Neg Expr | 
+             And Expr Expr |
+             Or Expr Expr |
+             Impl Expr Expr 
+             deriving (Show, Eq) 
+
+
+
+type Parser = Parsec Void String
+
+
+sc :: Parser ()
+sc = L.space space1 empty empty
+
+symbol :: String -> Parser String
+symbol = L.symbol sc
+
+lexeme :: Parser a -> Parser a
+lexeme = L.lexeme sc
+
+identifier :: Parser String
+identifier = (lexeme . try) ((:) <$> letterChar <*> many (alphaNumChar <|> char '’')) 
+
+parens :: Parser a -> Parser a
+parens = between (symbol "(") (symbol ")")
+
+literal = Var <$> identifier
+
+expr :: Parser Expr
+expr = makeExprParser term table
+    where
+        term = parens expr <|> literal 
+        table = [[Prefix (Neg <$ symbol "!")],
+                 [InfixL (And <$ symbol "&")],
+                 [InfixL (Or  <$ symbol "|")],
+                 [InfixR (Impl <$ symbol "->")]]
+
+prs :: String -> Maybe Expr
+prs input = parseMaybe expr input
+
+render :: Expr -> String
+render (Var x) = x
+render (Neg e) = "(!" ++ render e ++ ")"
+render (And e1 e2) = "(&," ++ render e1 ++ "," ++ render e2 ++ ")"
+render (Or e1 e2) = "(|," ++ render e1 ++ "," ++ render e2 ++ ")"
+render (Impl e1 e2) = "(->," ++ render e1 ++ "," ++ render e2 ++ ")"
+
+
+unwrap :: Maybe String -> String
+unwrap (Just x) = x
+unwrap (Nothing) = "Error"
