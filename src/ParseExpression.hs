@@ -30,18 +30,21 @@ lexeme :: Parser a -> Parser a
 lexeme = L.lexeme sc
 
 identifier :: Parser String
-identifier = (lexeme . try) ((:) <$> letterChar <*> many (alphaNumChar <|> char '’')) 
+identifier = (lexeme . try) ((:) <$> letterChar <*> many (alphaNumChar <|> char '\'')) 
 
 parens :: Parser a -> Parser a
 parens = between (symbol "(") (symbol ")")
 
 literal = Var <$> identifier
 
+
+manyUnaryNeg = foldr1 (.) <$> some (Neg <$ symbol "!")
+
 expr :: Parser Expr
-expr = makeExprParser term table
+expr = between sc sc $ makeExprParser term table
     where
-        term = parens expr <|> literal 
-        table = [[Prefix (Neg <$ symbol "!")],
+        term = parens expr <|> literal  
+        table = [[Prefix (manyUnaryNeg)],
                  [InfixL (And <$ symbol "&")],
                  [InfixL (Or  <$ symbol "|")],
                  [InfixR (Impl <$ symbol "->")]]
@@ -60,3 +63,7 @@ render (Impl e1 e2) = "(->," ++ render e1 ++ "," ++ render e2 ++ ")"
 unwrap :: Maybe String -> String
 unwrap (Just x) = x
 unwrap (Nothing) = "Error"
+
+
+pr :: String -> String
+pr inp = unwrap $ render <$> prs inp
