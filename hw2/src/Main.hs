@@ -24,7 +24,9 @@ processor st ind = do
                  let expr = unwrap $ prs line
                  core_st <- st
                  new_st <- return $ putIntoComputer expr ind core_st
-                 processor (return new_st) (ind + 1)
+                 if isJust new_st then processor (return (unwrap new_st)) (ind+1) 
+                    else
+                         return (Store empty empty empty empty [])
 
 
 pretty_print :: [(Expr, MetaInfo)] -> Int -> IO ()
@@ -42,15 +44,18 @@ collect_header [] targ True = " |- " ++ format_expr targ
 collect_header [] targ False = "|- " ++ format_expr targ
 
 
+needHeader :: [(Expr, MetaInfo)] -> Bool
+needHeader [] = False
+needHeader _ = True
+
 success :: Storage -> [Expr] -> Expr -> IO ()
 success new_st hypotheses_raw targetExpression= do
     let proof = unwrapProof (strip new_st targetExpression)
-    putStrLn (collect_header hypotheses_raw targetExpression False)
+    if needHeader proof then putStrLn (collect_header hypotheses_raw targetExpression False)     else return ()
     pretty_print proof 1
 
-faily :: IO ()
-faily = do
-    putStrLn "Proof is incorrect"
+szz :: Storage -> String
+szz (Store a b c d e) = show $ length e
 
 main :: IO ()
 main = do 
@@ -62,5 +67,5 @@ main = do
     let hypotheses = makeHypoMap $ hypotheses_raw
     st <- return $ (Store empty empty empty hypotheses []) 
     new_st <- processor (return st) 1
-    if not $ check_correctness new_st then faily else success new_st hypotheses_raw (unwrap targetExpression) 
+    success new_st hypotheses_raw (unwrap targetExpression) 
 

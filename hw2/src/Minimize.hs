@@ -23,15 +23,21 @@ data MetaInfo = Incorrect          |
                 Axiom Int          |
                 ModusPonens Int Int deriving (Eq, Show)
 
-putIntoComputer :: Expr -> Int -> Storage -> Storage
+putIntoComputer :: Expr -> Int -> Storage -> Maybe Storage
 putIntoComputer expr index (Store gl rev mp hyp states) =
-        Store new_gl new_rev new_mp hyp new_states
+        new_store 
         where new_meta = helper expr gl rev mp hyp 
               new_states = new_meta : states
               new_rev = Data.Map.insert index expr rev
               new_gl = if non_trivial new_meta then Data.Map.insert expr index gl else gl
               new_mp = if non_trivial new_meta then tryPut expr index mp else mp
+              new_store = if isIncorrect new_meta 
+                          then Nothing 
+                          else Just $ Store new_gl new_rev new_mp hyp new_states
 
+isIncorrect :: MetaInfo -> Bool
+isIncorrect (Incorrect) = True
+isIncorrect _ = False
 
 non_trivial :: MetaInfo -> Bool
 non_trivial (Incorrect) = False
@@ -171,7 +177,7 @@ unwrapStorageHelper _ [] _ _ = []
 
 reverseList :: [a] -> [a]
 reverseList [] = []
-reverseList (x:xs) = reverseList xs ++ [x]
+reverseList (x:xs) = (reverseList $! xs) ++ [x]
 
 normalize :: [(Expr, MetaInfo, Int)] -> [(Expr, MetaInfo)]
 normalize list = normalizeHelper (reverseList list) Data.Map.empty 1
@@ -214,8 +220,12 @@ stripHelper s e ind = s
 
 
 check_correctness :: Storage -> Bool 
-check_correctness (Store a b c d l) = checkValid l 
-                where 
-                checkValid (Incorrect:tail) = False
-                checkValid (_:tail) = checkValid tail
-                checkValid [] = True
+check_correctness (Store a b c d l) = False 
+
+checkValid :: [MetaInfo] -> Bool
+checkValid l = any (\x -> case x of
+                        Incorrect -> True
+                        _ -> False) l
+--checkValid (Incorrect:tail) = False
+--checkValid (_:tail) = checkValid tail
+--checkValid [] = True

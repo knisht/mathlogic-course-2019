@@ -30,7 +30,7 @@ clean:
 
 
 parser: lib/libhelp.a
-	ghc-8.0 --make -dynamic lib/libhelp.a -isrc:lib -Ilib -DINTEGER_GMP src/Main.hs -o parser
+	ghc --make -dynamic lib/libhelp.a -isrc:lib -Ilib -DINTEGER_GMP src/Main.hs -o parser
 
 pack: $(SOURCES) $(C_SOURCES)
 	zip $(PACKAGE) -r Makefile  $(PACK)
