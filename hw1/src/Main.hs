@@ -1,9 +1,12 @@
 module Main where
 
-import LogicParser
+import Grammar (Expr (..))
+import Lexer (alexScanTokens)
+import Parser (parseExpr)
 
 main :: IO ()
-main = do 
-    contents <- getContents
-    putStrLn $ unwrap $ render <$> prs contents
-    return ()
+main = do
+  input <- getContents
+  case parseExpr (alexScanTokens input) of
+    Left err   -> putStrLn err
+    Right expr -> putStrLn $ show expr
