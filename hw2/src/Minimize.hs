@@ -1,8 +1,8 @@
 module Minimize where
 
-import LogicParser
-import Data.Map
-import Data.Set
+import Grammar
+import Data.Map.Strict as Map
+import Data.Set as Set
 
 -- This class can store information about processed proof
 -- Store global reverse forMP hypotheses meta
@@ -28,8 +28,8 @@ putIntoComputer expr index (Store gl rev mp hyp states) =
         new_store 
         where new_meta = helper expr gl rev mp hyp 
               new_states = new_meta : states
-              new_rev = Data.Map.insert index expr rev
-              new_gl = if non_trivial new_meta then Data.Map.insert expr index gl else gl
+              new_rev = Map.insert index expr rev
+              new_gl = if non_trivial new_meta then Map.insert expr index gl else gl
               new_mp = if non_trivial new_meta then tryPut expr index mp else mp
               new_store = if isIncorrect new_meta 
                           then Nothing 
@@ -49,15 +49,15 @@ tryPut (Impl l r) ind mp = update (\list -> Just (ind : list)) r (updated r mp)
 tryPut _ _ mp = mp
 
 updated :: Ord k => k -> Map k [a] -> Map k [a]
-updated key mp = if not (isJust (key `Data.Map.lookup` mp)) then Data.Map.insert key [] mp else mp
+updated key mp = if not (isJust (key `Map.lookup` mp)) then Map.insert key [] mp else mp
 
 helper :: Expr -> Map Expr Int -> Map Int Expr -> Map Expr [Int] -> Map Expr Int -> MetaInfo
-helper expr gl rev mp hyp = if (isJust $ Data.Map.lookup expr gl) then
+helper expr gl rev mp hyp = if (isJust $ Map.lookup expr gl) then
                                Duplicate 
-                               else if (isAxiom expr) then
-                                    getAxiom expr
-                                    else if (isHypothesis expr hyp) then
-                                         getHypothesis expr hyp 
+                               else if (isHypothesis expr hyp) then
+                                    getHypothesis expr hyp
+                                    else if (isAxiom expr) then
+                                         getAxiom expr 
                                          else if (isModusPonens expr gl rev mp) then
                                               getModusPonens expr gl rev mp
                                               else Incorrect
@@ -77,7 +77,7 @@ getAxiomHelper i (hd : tl) e = if checkSubstitution hd e then i
                                else getAxiomHelper (i + 1) tl e
 
 isHypothesis :: Expr -> Map Expr Int -> Bool
-isHypothesis e mp = isJust $ (e `Data.Map.lookup` mp)
+isHypothesis e mp = isJust $ (e `Map.lookup` mp)
 
 getHypothesis :: Expr -> Map Expr Int -> MetaInfo
 getHypothesis e mp= Hypothesis $ mp ! e
@@ -88,7 +88,7 @@ isModusPonens e gl rev mp = case getModusPonens e gl rev mp of
                             _ -> True
 
 getModusPonens :: Expr -> Map Expr Int -> Map Int Expr -> Map Expr [Int] -> MetaInfo
-getModusPonens e gl rev mp = case unwrapMP gl rev (e `Data.Map.lookup` mp) of (a, b) -> ModusPonens a b
+getModusPonens e gl rev mp = case unwrapMP gl rev (e `Map.lookup` mp) of (a, b) -> ModusPonens a b
 
 unwrapMP :: Map Expr Int -> Map Int Expr -> Maybe [Int] -> (Int, Int)
 unwrapMP gl rev (Just (ind : tl)) = if isJust $ leftPart 
@@ -98,7 +98,7 @@ unwrapMP gl rev (Just (ind : tl)) = if isJust $ leftPart
                                     fullExpr = rev ! ind
                                     leftExpr = case fullExpr of
                                                (Impl l _) -> l
-                                    leftPart = leftExpr `Data.Map.lookup` gl
+                                    leftPart = leftExpr `Map.lookup` gl
 unwrapMP _ _ _ = (0, 0)
 
 
@@ -135,7 +135,7 @@ checkSubstitution axiom target = checkMap
     where
     mp :: Map String (Maybe Expr)
     mp = axiomHelper axiom target
-    checkMap = Data.Map.foldr (\x val -> val && isJust x) True mp
+    checkMap = Map.foldr (\x val -> val && isJust x) True mp
 
 merger :: Expr -> Expr -> Expr -> Expr -> Map String (Maybe Expr)
 merger la ra le re = unionWith 
@@ -150,22 +150,29 @@ axiomHelper (Impl la ra) (Impl le re) = merger la ra le re
 axiomHelper (Or la ra) (Or le re) = merger la ra le re
 axiomHelper (And la ra) (And le re) = merger la ra le re
 axiomHelper (Neg x) (Neg y) = merger x x y y
-axiomHelper (Var x) e = Data.Map.insert x (Just e) Data.Map.empty 
-axiomHelper _ _ = Data.Map.insert "z" Nothing Data.Map.empty
+axiomHelper (Var x) e = Map.insert x (Just e) Map.empty 
+axiomHelper _ _ = Map.insert "z" Nothing Map.empty
 
 
 
-unwrapProof :: Storage -> [(Expr, MetaInfo)]
-unwrapProof (Store _ rev _ _ meta) = normalize $ unwrapStorageHelper metalen meta rev (Data.Set.singleton metalen)
+unwrapProof :: Storage -> Expr -> [(Expr, MetaInfo)]
+unwrapProof (Store _ rev _ _ meta) target = if adequate (metalen `Map.lookup` rev) target 
+                          then normalize $ unwrapStorageHelper metalen meta rev (Set.singleton metalen) 
+                          else []
     where metalen = length meta
+
+
+adequate :: Maybe Expr -> Expr -> Bool
+adequate Nothing x = False
+adequate (Just a) x = x == a 
 
 -- Another int in tuple is for true number
 unwrapStorageHelper :: Int -> [MetaInfo] -> Map Int Expr -> Set Int 
                        -> [(Expr, MetaInfo, Int)]
 unwrapStorageHelper ind (hd : tl) rev known =
-         if Data.Set.member ind known then
+         if Set.member ind known then
          case hd of
-            ModusPonens x y -> (rev ! ind, hd, ind) : (unwrapStorageHelper (ind - 1) tl rev (Data.Set.insert x (Data.Set.insert y known)))
+            ModusPonens x y -> (rev ! ind, hd, ind) : (unwrapStorageHelper (ind - 1) tl rev (Set.insert x (Set.insert y known)))
             Hypothesis x -> (rev ! ind, hd, ind) : (unwrapStorageHelper (ind - 1) tl rev known)
             Axiom x -> (rev ! ind, hd, ind) : (unwrapStorageHelper (ind - 1) tl rev known)
             _ -> unwrapStorageHelper (ind - 1) tl rev known
@@ -180,7 +187,7 @@ reverseList [] = []
 reverseList (x:xs) = (reverseList $! xs) ++ [x]
 
 normalize :: [(Expr, MetaInfo, Int)] -> [(Expr, MetaInfo)]
-normalize list = normalizeHelper (reverseList list) Data.Map.empty 1
+normalize list = normalizeHelper (reverseList list) Map.empty 1
 
 normalizeHelper :: [(Expr, MetaInfo, Int)] -> Map Int Int -> Int -> [(Expr, MetaInfo)] 
 normalizeHelper ((e, meta, ind) : tl) mp trueind = (e, modifiedMeta) : normalizeHelper tl modmp (trueind + 1)
@@ -189,7 +196,7 @@ normalizeHelper ((e, meta, ind) : tl) mp trueind = (e, modifiedMeta) : normalize
                                  (ModusPonens x y) -> ModusPonens (mp ! x) (mp ! y)
                                  _ -> meta
                 modifiedMeta = modify meta mp
-                modmp = Data.Map.insert ind trueind mp 
+                modmp = Map.insert ind trueind mp 
 normalizeHelper [] _ _ = []
 
 isJust :: Maybe a -> Bool
@@ -211,13 +218,18 @@ strip :: Storage -> Expr -> Storage
 strip (Store a b c d l) e = stripHelper (Store a b c d l) e (length l)
 
 stripHelper :: Storage -> Expr -> Int -> Storage
-stripHelper (Store a rev c d (x:tl)) e ind = case x of
-                                       Duplicate -> stripHelper (Store a rev c d tl) e (ind - 1)
-                                       _ -> if isJust (e `Data.Map.lookup` a) && (a ! e == ind) 
-                                            then Store a rev c d (x:tl)
-                                            else stripHelper (Store a rev c d tl) e (ind - 1)
+stripHelper (Store a rev c d (x:tl)) e ind =
+                case x of
+                Duplicate -> stripHelper (Store a rev c d tl) e (ind - 1)
+                _ -> if isJust (e `Map.lookup` a) && (a ! e == ind) 
+                   then Store a rev c d (x:tl)
+                   else stripHelper (Store a rev c d tl) e (ind - 1)
 stripHelper s e ind = s 
 
+checklast :: Storage -> Expr -> Bool
+checklast (Store _ rev _ _ meta) target = if isJust ((length meta) `Map.lookup` rev) then
+                                              rev ! (length meta) == target
+                                          else False
 
 check_correctness :: Storage -> Bool 
 check_correctness (Store a b c d l) = False 

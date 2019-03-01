@@ -1,36 +1,37 @@
-SOURCES=src/Main.hs src/LogicParser.hs src/Minimize.hs
-C_SOURCES=lib/fnv.c lib/cbits.c
-C_HEADERS=lib/text_cbits.h 
-BUILT_C_SOURCES=$(C_SOURCES:%.c=%.o)
-
-PACK=lib src
+SOURCES=src/Main.hs src/Grammar.hs src/ParseModule.hs src/Minimize.hs 
+GEN_SOURCES=src/Lexer.x src/Parser.y
+GENERATED=src/Lexer.hs src/Parser.hs
+PACKAGE=hw2.zip
 
 rwildcard=$(foreach d,$(wildcard $1*),$(call rwildcard,$d/,$2) $(filter $(subst *,%,$2),$d))
 
 BUILD_FILES=$(call rwildcard, , *.o *.hi *.a)
 
-PACKAGE=hw2.zip
 
 
 .PHONY: pack all run clean
 .SILENT: run
+
+
 
 all: parser
 
 run: 
 	./parser
 
-lib/libhelp.a: 
-	gcc -c lib/fnv.c -o lib/fnv.o
-	gcc -c lib/cbits.c -o lib/cbits.o
-	ar rcs lib/libhelp.a lib/fnv.o lib/cbits.o lib/text_cbits.h
-
 clean: 
-	rm $(BUILD_FILES) 
+	rm -rf src/*.o src/*.hi
+	rm -rf $(GENERATED)
+	rm -rf $(BUILD_FILES)
+	rm -f parser
 
+parser: $(GENERATED) $(SOURCES) 
+	ghc --make -dynamic -O3 -i./src:lib -Ilib ./src/Main.hs -o parser
 
-parser: lib/libhelp.a
-	ghc --make -dynamic lib/libhelp.a -isrc:lib -Ilib -DINTEGER_GMP src/Main.hs -o parser
-
+	
+$(GENERATED): $(GEN_SOURCES) $(SOURCES)
+	alex src/Lexer.x -o src/Lexer.hs
+	happy src/Parser.y -o src/Parser.hs
+	
 pack: $(SOURCES) $(C_SOURCES)
-	zip $(PACKAGE) -r Makefile  $(PACK)
+	zip $(PACKAGE) -r Makefile src lib
